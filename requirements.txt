@@ -1,0 +1,9 @@
+PyQt6==6.9.0
+PyQt6-3D==6.9.0
+PyQt6-Charts==6.9.0
+PyQt6-DataVisualization==6.9.0
+PyQt6-NetworkAuth==6.9.0
+PyQt6-QScintilla==2.14.1
+PyQt6-WebEngine==6.9.0
+PyQt6_sip==13.10.0
+wheel @ file:///usr/local/Cellar/python%403.13/3.13.3/libexec/wheel-0.45.1-py3-none-any.whl#sha256=c00982b077e92504359d52a0482365099ab8c23f26817848cf77c784f6af247c
