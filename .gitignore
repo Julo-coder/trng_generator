@@ -1,2 +1,5 @@
 env/
-trng_output.bin
+post.bin
+sha.bin
+source.bin
+

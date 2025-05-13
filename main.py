@@ -1,14 +1,12 @@
 import threading
 import random
-import struct
-import numpy as np
 import matplotlib.pyplot as plt
 from collections import Counter
 import math
+from hashlib import sha3_256  # Add this import at the top
 
 # ==== Parametry TRNG ====
-NUM_BITS = 13_000_000
-OUTPUT_FILE = "trng_output.bin"
+NUM_BITS = 100_000_000
 THREADS = 4
 CHUNK_SIZE = NUM_BITS // THREADS
 BITS_PER_BYTE = 8
@@ -24,20 +22,26 @@ def generate_bit(x, r, gamma=2):
     for _ in range(gamma):
         x = logistic_map(x, r)
         x = normalize(x)
-    # Zwiększenie losowości przez dodanie dodatkowego przekształcenia
+    # Get raw bit before post-processing
+    raw_bit = int(x * 256) & 1
+    # Post-processing
     random_factor = random.uniform(0, 1)
     x = (x + random_factor) % 1
-    return int(x * 256) & 1, x
+    processed_bit = int(x * 256) & 1
+    return raw_bit, processed_bit, x
 
 # ==== Wątek TRNG ====
-def thread_trng(output, index, bits_to_generate):
+def thread_trng(raw_output, processed_output, index, bits_to_generate):
     x = random.uniform(0.1, 0.9)
     r = 3.99
-    bits = []
+    raw_bits = []
+    processed_bits = []
     for _ in range(bits_to_generate):
-        bit, x = generate_bit(x, r)
-        bits.append(bit)
-    output[index] = bits
+        raw_bit, processed_bit, x = generate_bit(x, r)
+        raw_bits.append(raw_bit)
+        processed_bits.append(processed_bit)
+    raw_output[index] = raw_bits
+    processed_output[index] = processed_bits
 
 # ==== Zapis bitów do pliku bin ====
 def save_bits_to_file(bit_array, filename):
@@ -74,35 +78,64 @@ def plot_histogram(byte_array, sample_size=100_000):
     plt.tight_layout()
     plt.show()
 
+# Add new function for SHA3-256 hashing
+def hash_bits(bit_array):
+    # Convert bits to bytes for hashing
+    byte_array = bytearray()
+    for i in range(0, len(bit_array), 8):
+        byte = 0
+        for j in range(8):
+            if i + j < len(bit_array):
+                byte = (byte << 1) | bit_array[i + j]
+        byte_array.append(byte)
+    
+    # Create SHA3-256 hash
+    hasher = sha3_256()
+    hasher.update(byte_array)
+    return hasher.digest()
+
 # ==== Główna funkcja ====
 def main():
     print("Generowanie TRNG...")
     threads = []
-    output = [None] * THREADS
+    raw_output = [None] * THREADS
+    processed_output = [None] * THREADS
 
     for i in range(THREADS):
-        t = threading.Thread(target=thread_trng, args=(output, i, CHUNK_SIZE))
+        t = threading.Thread(target=thread_trng, args=(raw_output, processed_output, i, CHUNK_SIZE))
         threads.append(t)
         t.start()
 
     for t in threads:
         t.join()
 
-    all_bits = []
-    for chunk in output:
-        all_bits.extend(chunk)
+    raw_bits = []
+    processed_bits = []
+    for chunk in raw_output:
+        raw_bits.extend(chunk)
+    for chunk in processed_output:
+        processed_bits.extend(chunk)
 
-    # Zapis do pliku
-    save_bits_to_file(all_bits[:NUM_BITS], OUTPUT_FILE)
-    print(f"Zapisano {NUM_BITS} bitów do pliku {OUTPUT_FILE}")
+    # Zapis do plików
+    save_bits_to_file(raw_bits[:NUM_BITS], "source.bin")
+    save_bits_to_file(processed_bits[:NUM_BITS], "post.bin")
+    
+    # Add SHA3-256 hashing and save
+    hashed_data = hash_bits(processed_bits[:NUM_BITS])
+    with open("sha.bin", "wb") as f:
+        f.write(hashed_data)
+    
+    print(f"Zapisano {NUM_BITS} surowych bitów do pliku source.bin")
+    print(f"Zapisano {NUM_BITS} przetworzonych bitów do pliku post.bin")
+    print(f"Zapisano {len(hashed_data)} bajtów haszu SHA3-256 do pliku sha.bin")
 
-    # Konwersja do bajtów
+    # Konwersja do bajtów (używamy przetworzonych bitów do analizy)
     byte_array = []
-    for i in range(0, len(all_bits), 8):
+    for i in range(0, len(processed_bits), 8):
         byte = 0
         for j in range(8):
-            if i + j < len(all_bits):
-                byte = (byte << 1) | all_bits[i + j]
+            if i + j < len(processed_bits):
+                byte = (byte << 1) | processed_bits[i + j]
         byte_array.append(byte)
 
     # Oblicz entropię
