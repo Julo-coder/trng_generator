@@ -6,7 +6,7 @@ import math
 from hashlib import sha3_256  # Add this import at the top
 
 # ==== Parametry TRNG ====
-NUM_BITS = 100_000_000
+NUM_BITS = 13_000_000
 THREADS = 4
 CHUNK_SIZE = NUM_BITS // THREADS
 BITS_PER_BYTE = 8
@@ -84,7 +84,7 @@ def hash_bits(bit_array):
     byte_array = bytearray()
     for i in range(0, len(bit_array), 8):
         byte = 0
-        for j in range(8):
+        for j in range (8):
             if i + j < len(bit_array):
                 byte = (byte << 1) | bit_array[i + j]
         byte_array.append(byte)
@@ -93,6 +93,55 @@ def hash_bits(bit_array):
     hasher = sha3_256()
     hasher.update(byte_array)
     return hasher.digest()
+
+def plot_data_analysis(data, title, is_sha=False, sample_size=100_000):
+    """Plot histogram and calculate entropy for given data"""
+    # Convert to bytes if input is bits
+    if isinstance(data[0], int) and data[0] in (0, 1):
+        byte_array = []
+        for i in range(0, len(data), 8):
+            byte = 0
+            for j in range(8):
+                if i + j < len(data):
+                    byte = (byte << 1) | data[i + j]
+            byte_array.append(byte)
+    else:
+        byte_array = list(data)
+
+    # Calculate entropy
+    entropy = calculate_entropy(byte_array)
+    
+    # Create histogram
+    sample = byte_array[:sample_size]
+    sample = [byte & 0xFF for byte in sample]
+    
+    # Create new figure for each plot
+    plt.figure(figsize=(10, 6))
+    
+    if is_sha:
+        # Special formatting for SHA histogram
+        counts, bins, _ = plt.hist(sample, bins=256, range=(0, 255), 
+                                 density=True, color='black', rwidth=1)
+        plt.ylim(0, 0.006)  # Fixed y-axis limit for SHA
+        plt.title("Empiryczny rozkład zmiennych losowych po SHA3-256")
+    else:
+        counts, bins, _ = plt.hist(sample, bins=256, range=(0, 255), 
+                                 density=True, color='black', rwidth=1)
+        plt.ylim(0, max(counts) * 1.1)
+        plt.title(f"{title}\nEntropia Shannona: {entropy:.6f} bitów/bajt")
+    
+    plt.xlabel("Wartość (x)")
+    plt.ylabel("Częstość występowania (p)")
+    plt.grid(False)
+    plt.xlim(0, 255)
+    
+    # Remove right and top spines
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().spines['top'].set_visible(False)
+    
+    plt.tight_layout()
+    plt.show()
+    return entropy
 
 # ==== Główna funkcja ====
 def main():
@@ -142,8 +191,34 @@ def main():
     entropy = calculate_entropy(byte_array)
     print(f"Entropia Shannona: {entropy:.6f} bitów na bajt (max = 8.0)")
 
-    # Wykres histogramu
-    plot_histogram(byte_array)
+    # Analiza danych i wykresy
+    print("\nAnaliza statystyczna danych:")
+    
+    # Konwertuj surowe bity do bajtów przed analizą
+    raw_bytes = []
+    for i in range(0, len(raw_bits), 8):
+        byte = 0
+        for j in range(8):
+            if i + j < len(raw_bits):
+                byte = (byte << 1) | raw_bits[i + j]
+        raw_bytes.append(byte)
+    
+    # Raw bits analysis
+    entropy_raw = plot_data_analysis(raw_bytes, "Histogram surowych danych")
+    print(f"Entropia surowych danych: {entropy_raw:.6f} bitów/bajt")
+    
+    # Processed bits analysis
+    entropy_processed = plot_data_analysis(processed_bits[:NUM_BITS], "Histogram danych po post-processingu")
+    print(f"Entropia danych po post-processingu: {entropy_processed:.6f} bitów/bajt")
+    
+    # Hashed data analysis
+    print("\nAnalizowanie danych po SHA3-256...")
+    entropy_hashed = plot_data_analysis(list(hashed_data), 
+                                      "Histogram danych po SHA3-256",
+                                      is_sha=True)
+    print(f"Entropia danych po SHA3-256: {entropy_hashed:.6f} bitów/bajt")
+    
+    plt.show()
 
 if __name__ == "__main__":
     main()
